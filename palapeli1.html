@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Palapeli</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            background-color: #f0f0f0;
+            margin: 0;
+            overflow: hidden;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+        }
+        #puzzle-container {
+            display: grid;
+            grid-template-columns: repeat(3, 100px); /* 3x3 palapeli, palojen koko 100x100px */
+            grid-template-rows: repeat(3, 100px);
+            gap: 5px;
+            border: 2px solid #ccc;
+            padding: 5px;
+            background-color: #fff;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            position: relative; /* Container on suhteellinen */
+        }
+        .puzzle-piece {
+            width: 100px;
+            height: 100px;
+            background-size: 300px 300px; /* Alkuperäisen kuvan koko */
+            cursor: grab;
+            border: 1px solid #eee;
+            box-sizing: border-box;
+            user-select: none; /* Estää tekstin valinnan vedettäessä */
+            transition: transform 0.2s ease-out; /* Tasaisempi siirtymä palan liikkuessa */
+            z-index: 1; /* Normaalit palaset */
+        }
+        .puzzle-piece.dragging {
+            cursor: grabbing;
+            opacity: 0.8; /* Hieman läpinäkyvä kun vedetään */
+            z-index: 1000; /* Vedetty pala tulee kaikkien päälle */
+            position: fixed; /* Tärkeä! Vedetty pala irrotetaan DOMista ja sijoitetaan viewportiin */
+            margin: 0; /* Nollaa marginaalit */
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3); /* Varjo, jotta erottuu */
+        }
+        #completion-message {
+            margin-top: 20px;
+            font-size: 24px;
+            color: green;
+            font-weight: bold;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Kokoa pyöräilijä-palapeli!</h1>
+
+    <div id="puzzle-container"></div>
+
+    <div id="completion-message">Palapeli valmis! Siirrytään pyöräpeliin...</div>
+
+    <script>
+        const imageUrl = 'teddtmopo2.png';
+        const puzzleContainer = document.getElementById('puzzle-container');
+        const completionMessage = document.getElementById('completion-message');
+        const rows = 3;
+        const cols = 3;
+        const pieceSize = 100; // palan leveys ja korkeus
+
+        let piecesData = []; // Tähän tallennetaan palasten tiedot ja niiden nykyinen järjestys
+        let draggedPieceData = null; // Vedettävän palan data
+        let dragOffsetX, dragOffsetY; // Hiiren offset palan sisällä
+        let placeholder = null; // Paikanpitäjä, joka näyttää mihin pala tippuu
+
+        // Luo palapelin palaset ja tallenna niiden alkuperäinen tila
+        function createPuzzlePieces() {
+            for (let r = 0; r < rows; r++) {
+                for (let c = 0; c < cols; c++) {
+                    const originalIndex = r * cols + c;
+                    piecesData.push({
+                        id: `piece-${originalIndex}`,
+                        originalIndex: originalIndex,
+                        row: r,
+                        col: c,
+                        currentOrderIndex: -1 // Päivitetään sekoituksen jälkeen
+                    });
+                }
+            }
+            shufflePieces();
+            renderPieces();
+        }
+
+        // Sekoita palaset satunnaisesti (päivittää piecesData-järjestyksen)
+        function shufflePieces() {
+            for (let i = piecesData.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [piecesData[i], piecesData[j]] = [piecesData[j], piecesData[i]];
+            }
+            // Päivitä currentOrderIndex sekoituksen jälkeen
+            piecesData.forEach((piece, index) => {
+                piece.currentOrderIndex = index;
+            });
+        }
+
+        // Piirrä/päivitä palaset DOMiin piecesData-taulukon perusteella
+        function renderPieces() {
+            puzzleContainer.innerHTML = ''; // Tyhjennä container ensin
+            piecesData.forEach(pieceData => {
+                const pieceElement = document.createElement('div');
+                pieceElement.classList.add('puzzle-piece');
+                pieceElement.id = pieceData.id;
+                pieceElement.style.backgroundImage = `url(${imageUrl})`;
+                pieceElement.style.backgroundPosition = `-${pieceData.col * pieceSize}px -${pieceData.row * pieceSize}px`;
+                pieceElement.dataset.originalIndex = pieceData.originalIndex;
+                pieceElement.dataset.currentOrderIndex = pieceData.currentOrderIndex; // Päivitetty indeksi
+                puzzleContainer.appendChild(pieceElement);
+            });
+        }
+
+        // Tarkista, onko palapeli valmis
+        function checkCompletion() {
+            let correctPieces = 0;
+            piecesData.forEach((piece, index) => {
+                if (piece.originalIndex === index) { // Verrataan alkuperäistä indeksiä nykyiseen sijaintiin piecesData-taulukossa
+                    correctPieces++;
+                }
+            });
+
+            if (correctPieces === piecesData.length) {
+                completionMessage.style.display = 'block';
+                setTimeout(() => {
+                    window.location.href = 'aja.html';
+                }, 3000);
+            }
+        }
+
+        // Drag and Drop -logiikka
+        puzzleContainer.addEventListener('mousedown', (e) => {
+            if (e.target.classList.contains('puzzle-piece')) {
+                const targetElement = e.target;
+                const index = Array.from(puzzleContainer.children).indexOf(targetElement);
+                if (index === -1) return; // Jos ei löydy, jotain meni pieleen
+
+                draggedPieceData = piecesData[index];
+                targetElement.classList.add('dragging');
+
+                const rect = targetElement.getBoundingClientRect();
+                dragOffsetX = e.clientX - rect.left;
+                dragOffsetY = e.clientY - rect.top;
+
+                // Aseta vedetyn palan alkuperäinen sijainti absoluuttiseksi viewportissa
+                targetElement.style.left = `${rect.left}px`;
+                targetElement.style.top = `${rect.top}px`;
+
+                // Luo paikanpitäjä
+                placeholder = document.createElement('div');
+                placeholder.classList.add('puzzle-piece'); // Perustyylit
+                placeholder.style.border = '2px dashed #999';
+                placeholder.style.backgroundColor = 'rgba(200,200,200,0.3)';
+                placeholder.style.backgroundImage = 'none'; // Ei kuvaa
+                puzzleContainer.insertBefore(placeholder, targetElement); // Aseta ennen vedettävää
+
+                // Piilota alkuperäinen pala (koska dragging luokka ottaa sen pois DOMin virrasta)
+                targetElement.style.visibility = 'hidden';
+            }
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (draggedPieceData) {
+                const draggedElement = document.getElementById(draggedPieceData.id);
+                if (draggedElement) {
+                    draggedElement.style.left = `${e.clientX - dragOffsetX}px`;
+                    draggedElement.style.top = `${e.clientY - dragOffsetY}px`;
+
+                    // Etsi pudotuskohde paikanpitäjälle
+                    const targetElement = document.elementFromPoint(e.clientX, e.clientY);
+                    if (targetElement && targetElement.classList.contains('puzzle-piece') && targetElement !== draggedElement && targetElement !== placeholder) {
+                         const targetIndex = Array.from(puzzleContainer.children).indexOf(targetElement);
+                         const placeholderIndex = Array.from(puzzleContainer.children).indexOf(placeholder);
+
+                         if (targetIndex !== -1 && placeholderIndex !== -1) {
+                             if (targetIndex < placeholderIndex) {
+                                 puzzleContainer.insertBefore(placeholder, targetElement);
+                             } else {
+                                 puzzleContainer.insertBefore(placeholder, targetElement.nextSibling);
+                             }
+                         }
+                    }
+                }
+            }
+        });
+
+        document.addEventListener('mouseup', (e) => {
+            if (draggedPieceData) {
+                const draggedElement = document.getElementById(draggedPieceData.id);
+                if (draggedElement) {
+                    draggedElement.classList.remove('dragging');
+                    draggedElement.style.visibility = 'visible'; // Näytä pala uudelleen
+                    draggedElement.style.position = ''; // Poista fixed-asettelu
+                    draggedElement.style.left = '';
+                    draggedElement.style.top = '';
+
+                    // Nyt kun placeholder on oikeassa paikassa, siirrä draggedElement siihen
+                    if (placeholder && puzzleContainer.contains(placeholder)) {
+                        puzzleContainer.replaceChild(draggedElement, placeholder);
+                    } else {
+                        // Jos placeholderia ei jostain syystä löydy, lisää se takaisin lopuksi
+                        puzzleContainer.appendChild(draggedElement);
+                    }
+
+                    // Päivitä piecesData taulukon järjestys DOMin mukaan
+                    const newOrderElements = Array.from(puzzleContainer.children);
+                    piecesData = newOrderElements.map(el => {
+                        const originalIndex = parseInt(el.dataset.originalIndex);
+                        return piecesData.find(p => p.originalIndex === originalIndex);
+                    });
+                    piecesData.forEach((piece, index) => piece.currentOrderIndex = index);
+
+                    placeholder = null; // Nollaa paikanpitäjä
+                    draggedPieceData = null; // Nollaa vedetty pala
+
+                    checkCompletion();
+                }
+            }
+        });
+
+        // Käynnistä palapeli
+        createPuzzlePieces();
+    </script>
+</body>
+</html>

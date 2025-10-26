@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pyöräilijä</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+            overflow: hidden; /* Estää sivun rullaamisen jos pyörä menee reunan yli */
+			
+			background-image: url('backis1.PNG');
+            background-repeat: no-repeat;
+			 background-attachment: fixed;
+  background-size: 100% 70%;
+        }
+        .container {
+            width: 100%;
+            height: 400px; /* Korkeus, jossa pyörä liikkuu */
+            position: relative;
+            border-bottom: 15px solid darkred; /* Maantie */
+            background-color: transparent;
+            overflow: hidden; /* Piilottaa kuvan, jos se menee reunan yli */
+        }
+        #bike {
+            position: absolute;
+            bottom: 1px; /* Aseta pyörä maantien päälle */
+            left: 0;
+            width: 330px; /* Pyörän koko */
+            height: auto;
+            transform: translateX(0); /* Alkuperäinen sijainti */
+            transition: transform 0.1s linear; /* Animaation tasaisuus */
+            transform-origin: center center; /* Kääntymisen keskipiste */
+        }
+        .controls {
+            margin-top: 20px;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            margin: 0 10px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <img id="bike" src="teddydriving3.png" alt="Pyöräilijä">
+    </div>
+
+    <div class="controls">
+        <button id="moveButton">Liikuta pyörää</button>
+        <button id="turnButton">Käännä pyörä</button>
+    </div>
+
+    <audio id="engineSound" src="mopo1.mp3" preload="auto"></audio>
+
+    <script>
+        const bike = document.getElementById('bike');
+        const moveButton = document.getElementById('moveButton');
+        const turnButton = document.getElementById('turnButton');
+        const engineSound = document.getElementById('engineSound');
+
+        let currentPosition = 0;
+        let direction = 1; // 1 = oikea, -1 = vasen
+        let isMoving = false;
+        let animationFrameId;
+
+        // HUOM: sinun täytyy korvata "bike.png" yllä olevan kuvasi URL:lla tai tallentaa kuva nimellä bike.png samaan kansioon kuin tämä HTML-tiedosto.
+        // HUOM: sinun täytyy luoda "engine.mp3" tiedosto ja tallentaa se samaan kansioon. Voit löytää ilmaisia moottoriääniä netistä tai äänittää itse.
+
+        function moveBike() {
+            if (isMoving) {
+                currentPosition += (10 * direction); // Liikkuu 10 pikseliä kerrallaan
+                bike.style.transform = `translateX(${currentPosition}px) scaleX(${direction})`;
+
+                // Tarkista, onko pyörä menossa liian kauas reunoista ja käännä se takaisin
+                if (currentPosition > window.innerWidth - bike.width && direction === 1) {
+                    direction = -1;
+                    bike.style.transform = `translateX(${currentPosition}px) scaleX(${direction})`;
+                } else if (currentPosition < 0 && direction === -1) {
+                    direction = 1;
+                    bike.style.transform = `translateX(${currentPosition}px) scaleX(${direction})`;
+                }
+
+                animationFrameId = requestAnimationFrame(moveBike);
+            }
+        }
+
+        moveButton.addEventListener('click', () => {
+            if (isMoving) {
+                isMoving = false;
+                cancelAnimationFrame(animationFrameId);
+                engineSound.pause();
+                engineSound.currentTime = 0; // Kelaa äänen alkuun
+                moveButton.textContent = "Liikuta pyörää";
+            } else {
+                isMoving = true;
+                engineSound.play();
+                moveBike();
+                moveButton.textContent = "Pysäytä pyörä";
+            }
+        });
+
+        turnButton.addEventListener('click', () => {
+            direction *= -1; // Vaihda suuntaa
+            bike.style.transform = `translateX(${currentPosition}px) scaleX(${direction})`;
+        });
+    </script>
+</body>
+</html>
